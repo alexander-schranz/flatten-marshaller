@@ -6,6 +6,9 @@ class FlattenMarshaller
 {
     public function __construct(
         private readonly string $metadataKey = '_metadata',
+        private readonly string $fieldSeparator = '.',
+        private readonly string $metadataSeparator = '/',
+        private readonly string $metadataPlaceholder = '*',
     ) {
     }
 
@@ -23,11 +26,12 @@ class FlattenMarshaller
         foreach ($flattenData as $key => $value) {
             unset($flattenData[$key]);
 
-            $newKey = \preg_replace('/\.(\d+)\./', '.', $key, -1);
-            $newKey = \preg_replace('/\.(\d+)$/', '', $newKey, -1);
+            $metadataKey = \preg_replace('/' . \preg_quote($this->metadataSeparator, '/') . '(\d+)' . \preg_quote($this->metadataSeparator, '/') . '/', $this->metadataSeparator, $key, -1);
+            $metadataKey = \preg_replace('/' . \preg_quote($this->metadataSeparator, '/') . '(\d+)$/', '', $metadataKey, -1);
+            $newKey = \str_replace($this->metadataSeparator, $this->fieldSeparator, $metadataKey);
 
-            if ($newKey === $key) {
-                $newData[$key] = $value;
+            if ($metadataKey === $key) {
+                $newData[$newKey] = $value;
 
                 continue;
             }
@@ -39,10 +43,10 @@ class FlattenMarshaller
                 ...$newValue,
             ];
 
-            if (\str_contains($newKey, '.')) {
+            if (\str_contains($metadataKey, $this->metadataSeparator)) {
                 foreach ($newValue as $v) {
-                    $metadata[$newKey][] = \preg_replace_callback('/[^.]+/', function ($matches) {
-                        return \is_numeric($matches[0]) ? $matches[0] : '*';
+                    $metadata[$metadataKey][] = \preg_replace_callback('/[^' . \preg_quote($this->metadataSeparator, '/') . ']+/', function ($matches) {
+                         return \is_numeric($matches[0]) ? $matches[0] : $this->metadataPlaceholder;
                     }, $key);
                 }
             }
@@ -70,7 +74,7 @@ class FlattenMarshaller
                 continue;
             }
 
-            $flattened = $this->doFlatten($value, $key . '.');
+            $flattened = $this->doFlatten($value, $key . $this->metadataSeparator);
             foreach ($flattened as $subKey => $subValue) {
                 $newData[$prefix . $subKey] = $subValue;
             }
@@ -88,34 +92,41 @@ class FlattenMarshaller
     {
         $newData = [];
         $metadata = [];
+        $metadataKeyMapping = [];
         if (\array_key_exists($this->metadataKey, $data)) {
             \assert(\is_string($data[$this->metadataKey]), 'Expected metadata to be a string.');
 
             $metadata = \json_decode($data[$this->metadataKey], true, flags: \JSON_THROW_ON_ERROR);
+
+            foreach (\array_keys($metadata) as $subMetadataKey) {
+                $metadataKeyMapping[\str_replace($this->metadataSeparator, $this->fieldSeparator, $subMetadataKey)] = $subMetadataKey;
+            }
+
             unset($data[$this->metadataKey]);
         }
 
         foreach ($data as $key => $value) {
-            if (!\array_key_exists($key, $metadata)) {
+            $metadataKey = $metadataKeyMapping[$key] ?? null;
+            if (null === $metadataKey) {
                 $newData[$key] = $value;
 
                 continue;
             }
 
-            $keyParts = \explode('.', $key);
+            $keyParts = \explode($this->metadataSeparator, $metadataKey);
             \assert(\is_array($value) && \array_is_list($value), 'Expected value to be an array.');
 
             foreach ($value as $subKey => $subValue) {
-                \assert(\array_key_exists($subKey, $metadata[$key]), 'Expected key "' . $subKey . '" to exist in "' . $key . '".');
+                \assert(\array_key_exists($subKey, $metadata[$metadataKey]), 'Expected key "' . $subKey . '" to exist in "' . $key . '".');
 
                 $keyPartsReplacements = $keyParts;
 
-                $newKeyPath = \preg_replace_callback('/\*/', function () use (&$keyPartsReplacements) {
-                    return \array_shift($keyPartsReplacements);
-                }, $metadata[$key][$subKey]);
+                $newKeyPath = \preg_replace_callback('/' . \preg_quote($this->metadataPlaceholder, '/') . '/', function () use (&$keyPartsReplacements) {
+                     return \array_shift($keyPartsReplacements);
+                }, $metadata[$metadataKey][$subKey]);
 
                 $newSubData = &$newData;
-                foreach (explode('.', $newKeyPath) as $newKeyPart) {
+                foreach (\explode($this->metadataSeparator, $newKeyPath) as $newKeyPart) {
                     $newSubData = &$newSubData[$newKeyPart];
                 }
 

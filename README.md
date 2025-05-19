@@ -49,7 +49,7 @@ public function doFlatten(array $data): array
 {
     $newData = [];
     foreach ($data as $key => $value) {
-        if (!\is_array($value)) {
+        if (!is_array($value)) {
             $newData[$prefix . $key] = $value;
 
             continue;
@@ -79,7 +79,7 @@ But this ends in our example in the following output:
  ]
 ```
 
-This is a very common format if you search for "Flatten JSON algorithm" examples.
+The above is a very common format if you search for "Flatten JSON algorithm" examples.
 But which isn't what we want, even we add a check on `array_is_list` and ending up in:
 
 ```php
@@ -152,8 +152,8 @@ class FlattenMarshaller
         foreach ($flattenData as $key => $value) {
             unset($flattenData[$key]);
 
-            $newKey = \preg_replace('/\.(\d+)\./', '.', $key, -1);
-            $newKey = \preg_replace('/\.(\d+)$/', '', $newKey, -1);
+            $newKey = preg_replace('/\.(\d+)\./', '.', $key, -1);
+            $newKey = preg_replace('/\.(\d+)$/', '', $newKey, -1);
 
             if ($newKey === $key) {
                 $newData[$key] = $value;
@@ -161,7 +161,7 @@ class FlattenMarshaller
                 continue;
             }
 
-            $newValue = \is_array($value) ? $value : [$value];
+            $newValue = is_array($value) ? $value : [$value];
 
             $newData[$newKey] = [
                 ...($newData[$newKey] ?? []),
@@ -181,7 +181,7 @@ class FlattenMarshaller
     {
         $newData = [];
         foreach ($data as $key => $value) {
-            if (!\is_array($value)) {
+            if (!is_array($value)) {
                 $newData[$prefix . $key] = $value;
 
                 continue;
@@ -263,7 +263,7 @@ original document JSON encoded. So we can use that to unflatten the data back to
 
 This comes with the big disadvantage that the document is now twice as big as it was before. The second issue is
 that when using the highlighting feature, it is applied to the flatten data not the raw data
-and so highlighting not work in all cases.
+and so highlighting not works correctly in all cases.
 
 So we need a better solution for this problem.
 
@@ -487,9 +487,78 @@ With these two methods we are able to flatten and unflatten JSON objects:
 ];
 ```
 
+## Addition after usage in SEAL
+
+~~For SEAL use case this is enough~~. I was wrong in this case after try to use that I found out
+that I used `_` in Loupe as field separator which can conflict with SEAL field name.
+
+Example if we rename our `blocks` field to `content_blocks` and use `_` instead of `.` as a separator:
+
+```php
+// unflatten data:
+[
+    'id' => 1,
+    'title' => 'Title',
+    'content_blocks' => [
+        [
+           'title' => 'Title 1',
+           'tags' => ['UI', 'UX'],
+        ],
+        [
+           'title' => 'Title 2',
+           'tags' => ['Tech'],
+        ],
+    ],
+];
+
+// flatten data:
+[
+    'id' => 1,
+    'title' => 'Title',
+    'content_blocks_title' => ['Title 1', 'Title 2'],
+    'content_blocks_tags' => ['UI', 'UX', 'Tech'],
+    '_metadata' => '{"content_blocks_title":["*_0_*","*_1_*"],"content_blocks_tags":["*_0_*_0","*_0_*_1","*_1_*_0"]}',
+];
+```
+
+I will not go over the whole refactoring, but I am now using two configurable separators,
+one for the field (`_`) and one for the metadata (`/`).
+
+```php
+// unflatten data:
+[
+    'id' => 1,
+    'title' => 'Title',
+    'content_blocks' => [
+        [
+           'title' => 'Title 1',
+           'tags' => ['UI', 'UX'],
+        ],
+        [
+           'title' => 'Title 2',
+           'tags' => ['Tech'],
+        ],
+    ],
+];
+
+// flatten data:
+[
+    'id' => 1,
+    'title' => 'Title',
+    'content_blocks_title' => ['Title 1', 'Title 2'],
+    'content_blocks_tags' => ['UI', 'UX', 'Tech'],
+    '_metadata' => '{"content_blocks/title":["*/0/*","*/1/*"],"content_blocks/tags":["*/0/*/0","*/0/*/1","*/1/*/0"]}',
+];
+```
+
+This way even if the search engine is limited to specific field names characters,
+we can still flatten and unflatten the data.
+
 The whole implementation can be found in [src/FlattenMarshaller.php](src/FlattenMarshaller.php).
 
-For the SEAL use case this is enough; the solution comes with a limitation that field names always need
+## Conclusion
+
+For SEAL use case this is enough; the solution comes with a limitation that field names always need
 to start with a letter as numeric fields are reserved for the list indexes. This is not a problem for SEAL
 as it already has that strict field name definition.
 

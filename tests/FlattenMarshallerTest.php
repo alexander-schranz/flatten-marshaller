@@ -63,8 +63,8 @@ class FlattenMarshallerTest extends TestCase
                 'blocks.title' => ['Title 1', 'Title 2'],
                 'blocks.tags' => ['UI', 'UX', 'Tech'],
                 '_metadata' => \json_encode([
-                    'blocks.title' => ['*.0.*', '*.1.*'],
-                    'blocks.tags' => ['*.0.*.0', '*.0.*.1', '*.1.*.0'],
+                    'blocks/title' => ['*/0/*', '*/1/*'],
+                    'blocks/tags' => ['*/0/*/0', '*/0/*/1', '*/1/*/0'],
                 ], \JSON_THROW_ON_ERROR),
             ],
         ];
@@ -90,6 +90,33 @@ class FlattenMarshallerTest extends TestCase
                 'id' => 1,
                 'title' => 'Title',
                 'tags' => ['UI', 'UX'],
+            ],
+        ];
+
+        yield 'object_with_field_separator' => [
+            'unflatten' => [
+                'id' => 1,
+                'header.title' => 'Title',
+                'content.blocks' => [
+                    [
+                        'title' => 'Title 1',
+                        'tags' => ['UI', 'UX'],
+                    ],
+                    [
+                        'title' => 'Title 2',
+                        'tags' => ['Tech'],
+                    ],
+                ],
+            ],
+            'flatten' => [
+                'id' => 1,
+                'header.title' => 'Title',
+                'content.blocks.title' => ['Title 1', 'Title 2'],
+                'content.blocks.tags' => ['UI', 'UX', 'Tech'],
+                '_metadata' => \json_encode([
+                    'content.blocks/title' => ['*/0/*', '*/1/*'],
+                    'content.blocks/tags' => ['*/0/*/0', '*/0/*/1', '*/1/*/0'],
+                ], \JSON_THROW_ON_ERROR),
             ],
         ];
     }
