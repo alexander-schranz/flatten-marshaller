@@ -4,6 +4,12 @@ namespace Schranz\FlattenMarshaller;
 
 class FlattenMarshaller
 {
+    /**
+     * @param non-empty-string $metadataKey
+     * @param non-empty-string $fieldSeparator
+     * @param non-empty-string $metadataSeparator
+     * @param non-empty-string $metadataPlaceholder
+     */
     public function __construct(
         private readonly string $metadataKey = '_metadata',
         private readonly string $fieldSeparator = '.',
@@ -17,16 +23,18 @@ class FlattenMarshaller
      *
      * @return array<string, mixed>
      */
-    public function flatten(array $data, string $prefix = ''): array
+    public function flatten(array $data): array
     {
-        $flattenData = $this->doFlatten($data, $prefix);
+        $flattenData = $this->doFlatten($data);
 
         $newData = [];
         $metadata = [];
         foreach ($flattenData as $key => $value) {
             unset($flattenData[$key]);
 
+            /** @var string $metadataKey */
             $metadataKey = \preg_replace('/' . \preg_quote($this->metadataSeparator, '/') . '(\d+)' . \preg_quote($this->metadataSeparator, '/') . '/', $this->metadataSeparator, $key, -1);
+            /** @var string $metadataKey */
             $metadataKey = \preg_replace('/' . \preg_quote($this->metadataSeparator, '/') . '(\d+)$/', '', $metadataKey, -1);
             $newKey = \str_replace($this->metadataSeparator, $this->fieldSeparator, $metadataKey);
 
@@ -37,16 +45,19 @@ class FlattenMarshaller
             }
 
             $newValue = \is_array($value) ? $value : [$value];
+            $oldValue = ($newData[$newKey] ?? []);
+
+            \assert(\is_array($oldValue), 'Expected old value of key "' . $newKey . '" to be an array got "' . \get_debug_type($oldValue) . '".');
 
             $newData[$newKey] = [
-                ...($newData[$newKey] ?? []),
+                ...$oldValue,
                 ...$newValue,
             ];
 
             if (\str_contains($metadataKey, $this->metadataSeparator)) {
                 foreach ($newValue as $v) {
                     $metadata[$metadataKey][] = \preg_replace_callback('/[^' . \preg_quote($this->metadataSeparator, '/') . ']+/', function ($matches) {
-                         return \is_numeric($matches[0]) ? $matches[0] : $this->metadataPlaceholder;
+                        return \is_numeric($matches[0]) ? $matches[0] : $this->metadataPlaceholder;
                     }, $key);
                 }
             }
@@ -91,11 +102,13 @@ class FlattenMarshaller
     public function unflatten(array $data): array
     {
         $newData = [];
+        /** @var array<string, array<string>> $metadata */
         $metadata = [];
         $metadataKeyMapping = [];
         if (\array_key_exists($this->metadataKey, $data)) {
             \assert(\is_string($data[$this->metadataKey]), 'Expected metadata to be a string.');
 
+            /** @var array<string, array<string>> $metadata */
             $metadata = \json_decode($data[$this->metadataKey], true, flags: \JSON_THROW_ON_ERROR);
 
             foreach (\array_keys($metadata) as $subMetadataKey) {
@@ -121,13 +134,14 @@ class FlattenMarshaller
 
                 $keyPartsReplacements = $keyParts;
 
+                /** @var string $newKeyPath */
                 $newKeyPath = \preg_replace_callback('/' . \preg_quote($this->metadataPlaceholder, '/') . '/', function () use (&$keyPartsReplacements) {
-                     return \array_shift($keyPartsReplacements);
+                    return \array_shift($keyPartsReplacements);
                 }, $metadata[$metadataKey][$subKey]);
 
                 $newSubData = &$newData;
                 foreach (\explode($this->metadataSeparator, $newKeyPath) as $newKeyPart) {
-                    $newSubData = &$newSubData[$newKeyPart];
+                    $newSubData = &$newSubData[$newKeyPart]; // @phpstan-ignore-line
                 }
 
                 $newSubData = $subValue;
