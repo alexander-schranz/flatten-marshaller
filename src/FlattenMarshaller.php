@@ -38,21 +38,26 @@ class FlattenMarshaller
             $metadataKey = \preg_replace('/' . \preg_quote($this->metadataSeparator, '/') . '(\d+)$/', '', $metadataKey, -1);
             $newKey = \str_replace($this->metadataSeparator, $this->fieldSeparator, $metadataKey);
 
-            if ($metadataKey === $key) {
+            if ($newKey === $key) {
                 $newData[$newKey] = $value;
 
                 continue;
             }
 
-            $newValue = \is_array($value) ? $value : [$value];
-            $oldValue = ($newData[$newKey] ?? []);
+            if ($metadataKey === $key) {
+                $newData[$newKey] = $value;
+                $newValue = [$value];
+            } else {
+                $newValue = \is_array($value) ? $value : [$value];
+                $oldValue = ($newData[$newKey] ?? []);
 
-            \assert(\is_array($oldValue), 'Expected old value of key "' . $newKey . '" to be an array got "' . \get_debug_type($oldValue) . '".');
+                \assert(\is_array($oldValue), 'Expected old value of key "' . $newKey . '" to be an array got "' . \get_debug_type($oldValue) . '".');
 
-            $newData[$newKey] = [
-                ...$oldValue,
-                ...$newValue,
-            ];
+                $newData[$newKey] = [
+                    ...$oldValue,
+                    ...$newValue,
+                ];
+            }
 
             if (\str_contains($metadataKey, $this->metadataSeparator)) {
                 foreach ($newValue as $v) {
@@ -127,7 +132,9 @@ class FlattenMarshaller
             }
 
             $keyParts = \explode($this->metadataSeparator, $metadataKey);
-            \assert(\is_array($value) && \array_is_list($value), 'Expected value to be an array.');
+            if (!\is_array($value)) {
+                $value = [$value];
+            }
 
             foreach ($value as $subKey => $subValue) {
                 \assert(\array_key_exists($subKey, $metadata[$metadataKey]), 'Expected key "' . $subKey . '" to exist in "' . $key . '".');
