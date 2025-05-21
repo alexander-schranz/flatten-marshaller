@@ -35,9 +35,9 @@ class FlattenMarshallerTest extends TestCase
     }
 
     /**
-     * @return \Generator<{
-     *     0: array<string, mixed>,
-     *     1: array<string, mixed>,
+     * @return \Generator<array{
+     *     flatten: array<string, mixed>,
+     *     unflatten: array<string, mixed>,
      * }>
      */
     public static function flattenDataProvider(): \Generator
@@ -114,6 +114,23 @@ class FlattenMarshallerTest extends TestCase
                     'comments/email' => ['*/0/*', '*/1/*'],
                     'comments/text' => ['*/0/*', '*/1/*'],
                 ], \JSON_THROW_ON_ERROR),
+            ],
+        ];
+
+        yield 'empty_values' => [
+            'unflatten' => [
+                'id' => 1,
+                'title' => 'Title',
+                'comments' => [],
+                'rating' => null,
+                'isSpecial' => null,
+            ],
+            'flatten' => [
+                'id' => 1,
+                'title' => 'Title',
+                'comments' => [],
+                'rating' => null,
+                'isSpecial' => null,
             ],
         ];
 

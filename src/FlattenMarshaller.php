@@ -61,14 +61,12 @@ class FlattenMarshaller
 
             if (\str_contains($metadataKey, $this->metadataSeparator)) {
                 foreach ($newValue as $v) {
-                    $metadata[$metadataKey][] = \preg_replace_callback('/[^' . \preg_quote($this->metadataSeparator, '/') . ']+/', function ($matches) {
-                        return \is_numeric($matches[0]) ? $matches[0] : $this->metadataPlaceholder;
-                    }, $key);
+                    $metadata[$metadataKey][] = \preg_replace_callback('/[^' . \preg_quote($this->metadataSeparator, '/') . ']+/', fn ($matches) => \is_numeric($matches[0]) ? $matches[0] : $this->metadataPlaceholder, $key);
                 }
             }
         }
 
-        if ($metadata !== []) {
+        if ([] !== $metadata) {
             $newData[$this->metadataKey] = \json_encode($metadata, \JSON_THROW_ON_ERROR);
         }
 
@@ -84,7 +82,9 @@ class FlattenMarshaller
     {
         $newData = [];
         foreach ($data as $key => $value) {
-            if (!\is_array($value)) {
+            if (!\is_array($value)
+                || [] === $value
+            ) {
                 $newData[$prefix . $key] = $value;
 
                 continue;
